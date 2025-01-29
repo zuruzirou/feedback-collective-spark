@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 type FormData = {
   department: string;
@@ -26,9 +27,10 @@ const joinYears = ['2020年以前', '2021', '2022', '2023', '2024'];
 export const SurveyForm = () => {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<FormData>(initialFormData);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step === 1 && (!formData.department || !formData.joinYear)) {
       toast({
         title: "エラー",
@@ -46,15 +48,35 @@ export const SurveyForm = () => {
       return;
     }
     if (step === 3) {
-      // Save to localStorage for demo purposes
-      const existingData = JSON.parse(localStorage.getItem('surveyResults') || '[]');
-      localStorage.setItem('surveyResults', JSON.stringify([...existingData, formData]));
-      
-      toast({
-        title: "送信完了",
-        description: "アンケートの回答ありがとうございました",
-      });
-      navigate('/admin-link');
+      setIsSubmitting(true);
+      try {
+        const { error } = await supabase
+          .from('survey_results')
+          .insert([{
+            department: formData.department,
+            join_year: formData.joinYear,
+            satisfaction: formData.satisfaction,
+            difficulty: formData.difficulty,
+            pace: formData.pace,
+          }]);
+
+        if (error) throw error;
+        
+        toast({
+          title: "送信完了",
+          description: "アンケートの回答ありがとうございました",
+        });
+        navigate('/admin-link');
+      } catch (error) {
+        console.error('Error submitting survey:', error);
+        toast({
+          title: "エラー",
+          description: "アンケートの送信に失敗しました",
+          variant: "destructive",
+        });
+      } finally {
+        setIsSubmitting(false);
+      }
       return;
     }
     setStep(step + 1);
@@ -188,8 +210,12 @@ export const SurveyForm = () => {
               戻る
             </Button>
           )}
-          <Button className="ml-auto" onClick={handleNext}>
-            {step === 3 ? '送信' : '次へ'}
+          <Button 
+            className="ml-auto" 
+            onClick={handleNext}
+            disabled={isSubmitting}
+          >
+            {step === 3 ? (isSubmitting ? '送信中...' : '送信') : '次へ'}
           </Button>
         </div>
       </div>

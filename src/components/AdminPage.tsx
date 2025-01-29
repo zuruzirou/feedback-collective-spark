@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/use-toast";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Table,
   TableBody,
@@ -27,19 +29,33 @@ export const AdminPage = () => {
     }
   };
 
+  const { data: surveyResults, isLoading, error } = useQuery({
+    queryKey: ['surveyResults'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('survey_results')
+        .select('*');
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: isAuthenticated,
+  });
+
   const calculateAverages = () => {
-    const results = JSON.parse(localStorage.getItem('surveyResults') || '[]');
+    if (!surveyResults) return [];
+    
     const departments = ['1Biz', '2Biz', '3Biz', '4Biz'];
     
     return departments.map(dept => {
-      const deptResults = results.filter((r: any) => r.department === dept);
+      const deptResults = surveyResults.filter(r => r.department === dept);
       if (deptResults.length === 0) return { department: dept, satisfaction: 0, difficulty: 0, pace: 0 };
       
       return {
         department: dept,
-        satisfaction: Number((deptResults.reduce((acc: number, curr: any) => acc + curr.satisfaction, 0) / deptResults.length).toFixed(2)),
-        difficulty: Number((deptResults.reduce((acc: number, curr: any) => acc + curr.difficulty, 0) / deptResults.length).toFixed(2)),
-        pace: Number((deptResults.reduce((acc: number, curr: any) => acc + curr.pace, 0) / deptResults.length).toFixed(2)),
+        satisfaction: Number((deptResults.reduce((acc, curr) => acc + curr.satisfaction, 0) / deptResults.length).toFixed(2)),
+        difficulty: Number((deptResults.reduce((acc, curr) => acc + curr.difficulty, 0) / deptResults.length).toFixed(2)),
+        pace: Number((deptResults.reduce((acc, curr) => acc + curr.pace, 0) / deptResults.length).toFixed(2)),
       };
     });
   };
@@ -61,6 +77,14 @@ export const AdminPage = () => {
         </div>
       </div>
     );
+  }
+
+  if (isLoading) {
+    return <div className="form-container">データを読み込み中...</div>;
+  }
+
+  if (error) {
+    return <div className="form-container">エラーが発生しました: {error.message}</div>;
   }
 
   const averages = calculateAverages();
